@@ -116,6 +116,29 @@ st.markdown(
     }
 
     .stCaptionContainer, [data-testid="stCaptionContainer"] p { color: var(--ink-soft) !important; }
+    div[data-testid="stExpander"] {
+    background-color: var(--card) !important;
+    border: 1px solid var(--hairline) !important;
+    border-radius: 10px !important;
+    }
+    div[data-testid="stExpander"] summary {
+        background-color: var(--card) !important;
+        color: var(--ink) !important;
+    }
+    div[data-testid="stExpander"] summary:hover,
+    div[data-testid="stExpander"] summary:focus,
+    div[data-testid="stExpander"] details[open] summary {
+        background-color: var(--paper) !important;
+        color: var(--ink) !important;
+    }
+    div[data-testid="stExpander"] div[data-testid="stExpanderDetails"] {
+        background-color: var(--card) !important;
+    }
+
+    /* st.dataframe inside the expander was hitting the same dark-background issue */
+    div[data-testid="stDataFrame"] {
+        background-color: var(--card) !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
