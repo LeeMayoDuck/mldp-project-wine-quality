@@ -169,7 +169,7 @@ st.markdown('<div class="hero-title">Wine Quality Predictor</div>', unsafe_allow
 st.markdown(
     '<div class="hero-sub">Estimate whether a batch is likely to be rated '
     '<b>&ldquo;good quality&rdquo;</b> (expert score &ge; 7) from lab-measured '
-    'physicochemical properties &mdash; before it goes through a costly, '
+    'physicochemical properties &ndash; before it goes through a costly, '
     'time-consuming expert sensory panel. The scorecard updates live as you '
     'move the sliders.</div>',
     unsafe_allow_html=True,
@@ -178,7 +178,7 @@ st.markdown(
 if not model_loaded:
     st.error(
         f"Could not find **{MODEL_PATH}**. Make sure this file sits in the same "
-        "folder as `app.py` &mdash; it's produced by running the training "
+        "folder as `app.py` &ndash; it's produced by running the training "
         "notebook, which saves the tuned model with `joblib.dump`."
     )
     st.stop()
@@ -330,5 +330,5 @@ with right:
 st.markdown('<hr class="hairline">', unsafe_allow_html=True)
 st.caption(
     "Model: Random Forest, tuned via RandomizedSearchCV (F1-optimized). "
-    "For decision support only \u2014 not a substitute for expert sensory evaluation."
+    "For decision support only &ndash; not a substitute for expert sensory evaluation."
 )
