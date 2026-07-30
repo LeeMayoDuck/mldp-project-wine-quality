@@ -40,30 +40,40 @@ st.markdown(
         --hairline: #E4D9CE;
     }
 
-    /* Force the whole app - including Streamlit's own widget wrappers - onto
-       the light palette. Streamlit's default dark-theme text color otherwise
-       leaks through on slider/tab labels regardless of generic tag selectors,
-       so every relevant data-testid is targeted explicitly with !important. */
     [data-testid="stAppViewContainer"], .stApp { background-color: var(--paper) !important; }
     section.main > div { padding-top: 1.5rem; }
 
-    h1, h2, h3, .hero-title,
-    [data-testid="stMarkdownContainer"] h1,
-    [data-testid="stMarkdownContainer"] h2,
-    [data-testid="stMarkdownContainer"] h3 {
+    [data-testid="stAppViewContainer"] h1,
+    [data-testid="stAppViewContainer"] h2,
+    [data-testid="stAppViewContainer"] h3,
+    .hero-title {
         font-family: 'Fraunces', serif !important;
         color: var(--ink) !important;
         letter-spacing: -0.01em;
     }
 
-    p, div, span,
+    /* Color is forced on all text-bearing elements, but font-family is kept
+       separate and excludes Streamlit's icon elements (data-testid
+       "stIconMaterial", or any class hinting at material icons/symbols) -
+       those render as ligature text using a special icon font, so forcing
+       them onto Inter turns the icon glyph into visible literal text (e.g.
+       the expander arrow showing up as the word "arrow_right" overlapping
+       its label). */
+    [data-testid="stAppViewContainer"] p,
+    [data-testid="stAppViewContainer"] div,
+    [data-testid="stAppViewContainer"] span,
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li {
+        color: var(--ink) !important;
+    }
+    [data-testid="stAppViewContainer"] p:not([data-testid="stIconMaterial"]):not([class*="material"]),
+    [data-testid="stAppViewContainer"] div:not([data-testid="stIconMaterial"]):not([class*="material"]),
+    [data-testid="stAppViewContainer"] span:not([data-testid="stIconMaterial"]):not([class*="material"]),
     [data-testid="stMarkdownContainer"] p,
     [data-testid="stMarkdownContainer"] li {
         font-family: 'Inter', sans-serif;
-        color: var(--ink) !important;
     }
 
-    /* Slider labels + numeric readout - the specific elements that were washed out */
     [data-testid="stWidgetLabel"] p,
     [data-testid="stWidgetLabel"] label,
     [data-testid="stSlider"] label,
@@ -75,8 +85,38 @@ st.markdown(
         opacity: 1 !important;
     }
 
+    /* Streamlit's hamburger menu renders in a BaseWeb popover portal, always
+       on a dark background regardless of the app's own light theme, so its
+       text needs to be forced white. The one in-app element that also uses
+       a BaseWeb popover is the slider's drag tooltip (the number that pops
+       up above the thumb) - that one sits on our light card background, so
+       it's excluded here and left to the --ink rule further up. */
+    div[data-baseweb="popover"] *:not([data-testid="stThumbValue"]),
+    [data-testid="stMainMenuPopover"],
+    [data-testid="stMainMenuPopover"] *,
+    div[data-baseweb="menu"],
+    div[data-baseweb="menu"] *,
+    ul[role="menu"],
+    ul[role="menu"] *,
+    li[role="menuitem"],
+    li[role="menuitem"] * {
+        color: #FFFFFF !important;
+        fill: #FFFFFF !important;
+    }
+
+    /* The toolbar (Deploy button, hamburger icon) sits in Streamlit's own
+       dark header chrome, which stays dark regardless of the app's theme -
+       var(--text-color) wasn't resolving to white there, so it's hardcoded. */
+    [data-testid="stAppDeployButton"] button,
+    [data-testid="stAppDeployButton"] span,
+    [data-testid="stMainMenuButton"],
+    [data-testid="stMainMenuButton"] svg {
+        color: #FFFFFF !important;
+        fill: #FFFFFF !important;
+    }
+
     /* ---------------------------------------------------------------------
-       Animations - keyframes
+       Animations
        --------------------------------------------------------------------- */
     @keyframes fadeInUp {
         from { opacity: 0; transform: translateY(14px); }
@@ -100,13 +140,11 @@ st.markdown(
         to   { transform: scale(1); opacity: 1; }
     }
 
-    /* Hero entrance - plays once on load */
     .hero-title, .hero-sub, .eyebrow {
         animation: fadeInUp 0.55s ease-out both;
     }
     .hero-sub { animation-delay: 0.08s; }
 
-    /* Smooth colour/background transitions across interactive elements */
     button[data-baseweb="tab"] p,
     div[data-baseweb="tab-highlight"],
     div[data-testid="stExpander"] summary,
@@ -115,14 +153,12 @@ st.markdown(
                     transform 0.2s ease, box-shadow 0.2s ease;
     }
 
-    /* Little lift + glow on the slider handle when focused/dragged */
     .stSlider [role="slider"]:hover,
     .stSlider [role="slider"]:focus {
         transform: scale(1.15);
         box-shadow: 0 0 0 6px rgba(110, 30, 51, 0.12);
     }
 
-    /* Tabs get a gentle lift on hover */
     button[data-baseweb="tab"] {
         transition: transform 0.2s ease;
     }
@@ -148,7 +184,6 @@ st.markdown(
     button[data-baseweb="tab"][aria-selected="true"] p { color: var(--bordeaux) !important; font-weight: 600 !important; }
     div[data-baseweb="tab-highlight"] { background-color: var(--bordeaux) !important; }
 
-    /* Scorecard - pops in fresh every time the prediction updates */
     .scorecard {
         background: var(--card);
         border: 1px solid var(--hairline);
@@ -204,12 +239,10 @@ st.markdown(
         background-color: var(--card) !important;
     }
 
-    /* st.dataframe inside the expander was hitting the same dark-background issue */
     div[data-testid="stDataFrame"] {
         background-color: var(--card) !important;
     }
 
-    /* Respect users who've asked their OS/browser to reduce motion */
     @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after {
             animation-duration: 0.001ms !important;
@@ -334,11 +367,7 @@ input_df = pd.DataFrame(
 )
 
 # ---------------------------------------------------------------------------
-# Live scorecard - recomputes on every rerun (i.e. every slider move),
-# no button needed since Streamlit already reruns the script automatically.
-# The .scorecard div is rebuilt with fresh markup each rerun, so its CSS
-# entrance animation (popIn) naturally replays every time the prediction
-# changes - that's what gives the "live" feel rather than a static swap.
+# Live scorecard - recomputes on every rerun (i.e. every slider move).
 # ---------------------------------------------------------------------------
 with right:
     st.markdown("### Live Scorecard")
@@ -372,28 +401,13 @@ with right:
             )
             card_class = "scorecard is-good" if prediction == 1 else "scorecard"
 
-            # Where the ring was sitting before this rerun. Used only as the
-            # animation's starting point, and as the initial paint so there's
-            # no flash before the script below takes over.
             prev_probability = st.session_state.get("_prev_probability", 0.0)
 
-            # IMPORTANT FIX: the ring used to be plain HTML injected via
-            # st.markdown(unsafe_allow_html=True) with a <script> tag inside
-            # it. That script never actually ran - browsers do not execute
-            # <script> tags that arrive via innerHTML, which is how
-            # st.markdown's raw-HTML path inserts content. That's why it
-            # printed out as literal text next to the card instead of
-            # animating anything.
-            #
-            # st.components.v1.html() is the Streamlit API that actually
-            # executes JavaScript, because it renders content inside a real
-            # <iframe>. So the whole scorecard (border, ring, verdict text)
-            # is now one self-contained HTML/CSS/JS document rendered
-            # through components.html instead of st.markdown. An iframe is
-            # its own document and can't see the app's page-level CSS
-            # variables, so the same colors/fonts are repeated here as
-            # literal values to keep it visually identical to the rest of
-            # the page.
+            # Rendered via components.html (real iframe) rather than
+            # st.markdown, so the <script> below actually executes and can
+            # animate the ring. The iframe is its own document with no
+            # access to the app's CSS variables, so colors are repeated here
+            # as literal values.
             scorecard_html = f"""
             <html>
             <head>
@@ -506,9 +520,8 @@ with right:
 
             components.html(scorecard_html, height=210, scrolling=False)
 
-            # Small one-off celebration the moment a batch first crosses into
-            # "Likely Good Quality" - not on every rerun, just on that transition,
-            # so it stays a nice touch rather than becoming annoying.
+            # One-off celebration only on the transition into "good quality",
+            # not on every rerun.
             if prediction == 1 and st.session_state.get("_prev_prediction") != 1:
                 st.balloons()
             st.session_state["_prev_prediction"] = int(prediction)
@@ -521,7 +534,3 @@ with right:
             st.error(f"Something went wrong while generating the prediction. Details: {e}")
 
 st.markdown('<hr class="hairline">', unsafe_allow_html=True)
-st.caption(
-    "Model: Random Forest, tuned via RandomizedSearchCV (F1-optimized). "
-    "For decision support only &ndash; not a substitute for expert sensory evaluation."
-)
