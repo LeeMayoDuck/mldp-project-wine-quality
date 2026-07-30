@@ -8,6 +8,7 @@ live as you move the sliders, whether a wine batch is likely to be rated
 import joblib
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -19,7 +20,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# Design tokens & styling
+# Design tokens, styling & animations
 # ---------------------------------------------------------------------------
 st.markdown(
     """
@@ -74,6 +75,61 @@ st.markdown(
         opacity: 1 !important;
     }
 
+    /* ---------------------------------------------------------------------
+       Animations - keyframes
+       --------------------------------------------------------------------- */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(14px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes popIn {
+        0%   { opacity: 0; transform: scale(0.94) translateY(6px); }
+        60%  { opacity: 1; transform: scale(1.015) translateY(0); }
+        100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    @keyframes slideInLeft {
+        from { opacity: 0; transform: translateX(-10px); }
+        to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes softPulseGood {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(47, 92, 54, 0.0); }
+        50%      { box-shadow: 0 0 0 8px rgba(47, 92, 54, 0.08); }
+    }
+    @keyframes ringPop {
+        from { transform: scale(0.85); opacity: 0; }
+        to   { transform: scale(1); opacity: 1; }
+    }
+
+    /* Hero entrance - plays once on load */
+    .hero-title, .hero-sub, .eyebrow {
+        animation: fadeInUp 0.55s ease-out both;
+    }
+    .hero-sub { animation-delay: 0.08s; }
+
+    /* Smooth colour/background transitions across interactive elements */
+    button[data-baseweb="tab"] p,
+    div[data-baseweb="tab-highlight"],
+    div[data-testid="stExpander"] summary,
+    .stSlider [role="slider"] {
+        transition: color 0.25s ease, background-color 0.25s ease,
+                    transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    /* Little lift + glow on the slider handle when focused/dragged */
+    .stSlider [role="slider"]:hover,
+    .stSlider [role="slider"]:focus {
+        transform: scale(1.15);
+        box-shadow: 0 0 0 6px rgba(110, 30, 51, 0.12);
+    }
+
+    /* Tabs get a gentle lift on hover */
+    button[data-baseweb="tab"] {
+        transition: transform 0.2s ease;
+    }
+    button[data-baseweb="tab"]:hover p {
+        transform: translateY(-1px);
+    }
+
     .hero-title { font-size: 2.6rem; font-weight: 600; margin-bottom: 0.1rem; }
     .hero-sub { color: var(--ink-soft) !important; font-size: 1.02rem; max-width: 640px; line-height: 1.5; }
     .hairline { border: none; border-top: 1px solid var(--hairline); margin: 1.6rem 0; }
@@ -92,11 +148,23 @@ st.markdown(
     button[data-baseweb="tab"][aria-selected="true"] p { color: var(--bordeaux) !important; font-weight: 600 !important; }
     div[data-baseweb="tab-highlight"] { background-color: var(--bordeaux) !important; }
 
+    /* Scorecard - pops in fresh every time the prediction updates */
     .scorecard {
         background: var(--card);
         border: 1px solid var(--hairline);
         border-radius: 14px;
         padding: 1.6rem 1.8rem;
+        animation: popIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+        transition: box-shadow 0.3s ease;
+    }
+    .scorecard.is-good {
+        animation: popIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both,
+                   softPulseGood 2.2s ease-in-out 0.4s infinite;
+    }
+
+    .ring-wrap {
+        animation: ringPop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+        animation-delay: 0.05s;
     }
 
     .verdict-good { color: var(--success) !important; }
@@ -113,6 +181,7 @@ st.markdown(
         color: var(--ink) !important;
         font-size: 0.9rem;
         margin-bottom: 0.6rem;
+        animation: slideInLeft 0.3s ease-out both;
     }
 
     .stCaptionContainer, [data-testid="stCaptionContainer"] p { color: var(--ink-soft) !important; }
@@ -139,6 +208,15 @@ st.markdown(
     div[data-testid="stDataFrame"] {
         background-color: var(--card) !important;
     }
+
+    /* Respect users who've asked their OS/browser to reduce motion */
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+            animation-duration: 0.001ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.001ms !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -156,7 +234,8 @@ def load_model(path: str):
 
 
 try:
-    model = load_model(MODEL_PATH)
+    with st.spinner("Loading model..."):
+        model = load_model(MODEL_PATH)
     model_loaded = True
 except FileNotFoundError:
     model_loaded = False
@@ -256,7 +335,10 @@ input_df = pd.DataFrame(
 
 # ---------------------------------------------------------------------------
 # Live scorecard - recomputes on every rerun (i.e. every slider move),
-# no button needed since Streamlit already reruns the script automatically
+# no button needed since Streamlit already reruns the script automatically.
+# The .scorecard div is rebuilt with fresh markup each rerun, so its CSS
+# entrance animation (popIn) naturally replays every time the prediction
+# changes - that's what gives the "live" feel rather than a static swap.
 # ---------------------------------------------------------------------------
 with right:
     st.markdown("### Live Scorecard")
@@ -280,22 +362,6 @@ with right:
             ring_color = "#2F5C36" if prediction == 1 else "#8A2E24"
             radius = 52
             circumference = 2 * 3.14159265 * radius
-            dash = circumference * probability
-            gap = circumference - dash
-
-            ring_svg = f"""
-            <svg width="140" height="140" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="70" cy="70" r="{radius}" fill="none" stroke="#E4D9CE" stroke-width="12"/>
-              <circle cx="70" cy="70" r="{radius}" fill="none" stroke="{ring_color}"
-                stroke-width="12" stroke-linecap="round"
-                stroke-dasharray="{dash:.1f} {gap:.1f}"
-                transform="rotate(-90 70 70)"/>
-              <text x="70" y="65" text-anchor="middle" font-family="IBM Plex Mono, monospace"
-                font-size="24" font-weight="600" fill="#2B1420">{pct:.0f}%</text>
-              <text x="70" y="84" text-anchor="middle" font-family="Inter, sans-serif"
-                font-size="11" fill="#5A4A50">confidence</text>
-            </svg>
-            """
 
             verdict_class = "verdict-good" if prediction == 1 else "verdict-standard"
             verdict_text = "Likely Good Quality" if prediction == 1 else "Standard Quality"
@@ -304,22 +370,149 @@ with right:
                 if prediction == 1
                 else "Below the threshold to flag as high-potential."
             )
+            card_class = "scorecard is-good" if prediction == 1 else "scorecard"
 
-            st.markdown(
-                f"""
-                <div class="scorecard">
-                  <div class="eyebrow">Live &middot; updates as you adjust sliders</div>
-                  <div style="display:flex; align-items:center; gap:1.4rem;">
-                    <div>{ring_svg}</div>
-                    <div>
-                      <div class="verdict-title {verdict_class}">{verdict_text}</div>
-                      <div class="verdict-caption">{caption_text}</div>
-                    </div>
-                  </div>
+            # Where the ring was sitting before this rerun. Used only as the
+            # animation's starting point, and as the initial paint so there's
+            # no flash before the script below takes over.
+            prev_probability = st.session_state.get("_prev_probability", 0.0)
+
+            # IMPORTANT FIX: the ring used to be plain HTML injected via
+            # st.markdown(unsafe_allow_html=True) with a <script> tag inside
+            # it. That script never actually ran - browsers do not execute
+            # <script> tags that arrive via innerHTML, which is how
+            # st.markdown's raw-HTML path inserts content. That's why it
+            # printed out as literal text next to the card instead of
+            # animating anything.
+            #
+            # st.components.v1.html() is the Streamlit API that actually
+            # executes JavaScript, because it renders content inside a real
+            # <iframe>. So the whole scorecard (border, ring, verdict text)
+            # is now one self-contained HTML/CSS/JS document rendered
+            # through components.html instead of st.markdown. An iframe is
+            # its own document and can't see the app's page-level CSS
+            # variables, so the same colors/fonts are repeated here as
+            # literal values to keep it visually identical to the rest of
+            # the page.
+            scorecard_html = f"""
+            <html>
+            <head>
+            <style>
+                @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
+                html, body {{
+                    margin: 0; padding: 0; background: transparent;
+                    font-family: 'Inter', sans-serif;
+                    overflow: hidden;
+                }}
+                .scorecard {{
+                    background: #FFFFFF;
+                    border: 1px solid #E4D9CE;
+                    border-radius: 14px;
+                    padding: 1.6rem 1.8rem;
+                    box-sizing: border-box;
+                    animation: popIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+                }}
+                .scorecard.is-good {{
+                    animation: popIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both,
+                               softPulseGood 2.2s ease-in-out 0.4s infinite;
+                }}
+                @keyframes popIn {{
+                    0%   {{ opacity: 0; transform: scale(0.94) translateY(6px); }}
+                    60%  {{ opacity: 1; transform: scale(1.015) translateY(0); }}
+                    100% {{ opacity: 1; transform: scale(1) translateY(0); }}
+                }}
+                @keyframes softPulseGood {{
+                    0%, 100% {{ box-shadow: 0 0 0 0 rgba(47, 92, 54, 0.0); }}
+                    50%      {{ box-shadow: 0 0 0 8px rgba(47, 92, 54, 0.08); }}
+                }}
+                .eyebrow {{
+                    font-family: 'IBM Plex Mono', monospace;
+                    font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase;
+                    color: #8A6A3D; font-weight: 600; margin-bottom: 0.3rem;
+                }}
+                .row {{ display: flex; align-items: center; gap: 1.4rem; }}
+                .verdict-title {{
+                    font-family: 'Fraunces', serif; font-size: 1.5rem; font-weight: 600;
+                    margin: 0.2rem 0 0.1rem 0;
+                }}
+                .verdict-good {{ color: #2F5C36; }}
+                .verdict-standard {{ color: #8A2E24; }}
+                .verdict-caption {{ color: #5A4A50; font-size: 0.92rem; margin-bottom: 0; }}
+                @media (prefers-reduced-motion: reduce) {{
+                    *, *::before, *::after {{
+                        animation-duration: 0.001ms !important;
+                        animation-iteration-count: 1 !important;
+                    }}
+                }}
+            </style>
+            </head>
+            <body>
+            <div class="{card_class}">
+              <div class="eyebrow">Live &middot; updates as you adjust sliders</div>
+              <div class="row">
+                <div>
+                  <svg width="140" height="140" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="70" cy="70" r="{radius}" fill="none" stroke="#E4D9CE" stroke-width="12"/>
+                    <circle id="ring-progress" cx="70" cy="70" r="{radius}" fill="none" stroke="{ring_color}"
+                      stroke-width="12" stroke-linecap="round"
+                      stroke-dasharray="{circumference:.2f} {circumference:.2f}"
+                      stroke-dashoffset="{circumference:.2f}"
+                      transform="rotate(-90 70 70)"/>
+                    <text id="ring-pct" x="70" y="65" text-anchor="middle" font-family="IBM Plex Mono, monospace"
+                      font-size="24" font-weight="600" fill="#2B1420">0%</text>
+                    <text x="70" y="84" text-anchor="middle" font-family="Inter, sans-serif"
+                      font-size="11" fill="#5A4A50">confidence</text>
+                  </svg>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                <div>
+                  <div class="verdict-title {verdict_class}">{verdict_text}</div>
+                  <div class="verdict-caption">{caption_text}</div>
+                </div>
+              </div>
+            </div>
+            <script>
+              var targetPct = {probability:.6f};
+              var startPct = {prev_probability:.6f};
+              var circumference = {circumference:.2f};
+              var circle = document.getElementById('ring-progress');
+              var label = document.getElementById('ring-pct');
+
+              function paint(p) {{
+                circle.setAttribute('stroke-dashoffset', (circumference * (1 - p)).toFixed(2));
+                label.textContent = Math.round(p * 100) + '%';
+              }}
+
+              var reduceMotion = window.matchMedia &&
+                window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+              if (reduceMotion) {{
+                paint(targetPct);
+              }} else {{
+                var duration = 700;
+                var startTime = null;
+                function ease(t) {{ return 1 - Math.pow(1 - t, 3); }}
+                function frame(ts) {{
+                  if (!startTime) startTime = ts;
+                  var t = Math.min((ts - startTime) / duration, 1);
+                  paint(startPct + (targetPct - startPct) * ease(t));
+                  if (t < 1) requestAnimationFrame(frame);
+                }}
+                requestAnimationFrame(frame);
+              }}
+            </script>
+            </body>
+            </html>
+            """
+
+            components.html(scorecard_html, height=210, scrolling=False)
+
+            # Small one-off celebration the moment a batch first crosses into
+            # "Likely Good Quality" - not on every rerun, just on that transition,
+            # so it stays a nice touch rather than becoming annoying.
+            if prediction == 1 and st.session_state.get("_prev_prediction") != 1:
+                st.balloons()
+            st.session_state["_prev_prediction"] = int(prediction)
+            st.session_state["_prev_probability"] = float(probability)
 
             with st.expander("See input summary"):
                 st.dataframe(input_df, use_container_width=True)
